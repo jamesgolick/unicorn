@@ -6,6 +6,7 @@ require 'fileutils'
 
 rails_pid = "#{Unicorn::HttpServer::START_CTX[:cwd]}/tmp/pids/unicorn.pid"
 cmd = File.basename($0)
+rails_root = File.dirname($0)
 daemonize = false
 listeners = []
 options = { :listeners => listeners }
@@ -89,6 +90,11 @@ opts = OptionParser.new("", 24, '  ') do |opts|
     ENV['RAILS_RELATIVE_URL_ROOT'] = v
   end
 
+  opts.on("--rails-root RAILS_ROOT", "The path where your rails app lives.",
+            "(default: .)") do |v|
+    rails_root = v
+  end
+
   # I'm avoiding Unicorn-specific config options on the command-line.
   # IMNSHO, config options on the command-line are redundant given
   # config files and make things unnecessarily complicated with multiple
@@ -120,13 +126,16 @@ end
 
 require 'pp' if $DEBUG
 
+abort("#{rails_root} does not exist.") unless File.directory?(rails_root)
+
 # this won't run until after forking if preload_app is false
 app = lambda do ||
+  Dir.chdir(rails_root)
   # Load Rails and the private version of Rack it bundles.
   begin
     require 'config/boot'
   rescue LoadError => err
-    abort "#$0 must be run inside RAILS_ROOT: #{err.inspect}"
+    abort "No config/boot found in #{rails_root}. #$0 must be run inside RAILS_ROOT: #{err.inspect}"
   end
   defined?(::RAILS_ROOT) or abort "RAILS_ROOT not defined by config/boot"
   defined?(::RAILS_ENV) or abort "RAILS_ENV not defined by config/boot"
